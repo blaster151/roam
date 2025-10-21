@@ -53,6 +53,7 @@ graph TB
 - Root component managing global state and routing
 - Handles keyboard shortcuts (Ctrl+B, Ctrl+I, Ctrl+K)
 - Manages autosave debouncing (2-second delay)
+- Theme management and dark mode toggle functionality
 
 #### 2. Sidebar Component
 ```typescript
@@ -190,6 +191,12 @@ interface SearchResult {
 - Abstract storage interface for future cloud migration
 - Sync conflict resolution preparation
 
+### Theme Service
+- Dark/light mode state management
+- Theme persistence in local storage
+- CSS custom property management for theme switching
+- System theme preference detection
+
 ## Error Handling
 
 ### Storage Errors
@@ -261,6 +268,8 @@ interface SearchResult {
 - High contrast mode support
 - Scalable text and UI elements
 - Color-blind friendly design choices
+- Dark mode theme with appropriate contrast ratios
+- Smooth theme transitions
 
 ## Performance Optimization
 

@@ -14,6 +14,7 @@ A web-based note-taking application that operates entirely within a browser, fea
 - **Nested_Note**: A note that exists as a child under a parent note, supporting up to two levels of hierarchy
 - **Autosave**: Automatic saving functionality that persists changes without user intervention
 - **Rich_Text**: Formatted text content including Markdown and ChatGPT-style formatting
+- **Dark_Mode**: An alternative color scheme with dark backgrounds and light text for reduced eye strain
 
 ## Requirements
 
@@ -104,3 +105,15 @@ A web-based note-taking application that operates entirely within a browser, fea
 3. THE Web_Note_App SHALL function without internet connectivity after initial load
 4. THE Web_Note_App SHALL not require server-side components for core functionality
 5. THE Web_Note_App SHALL load and initialize within 3 seconds on modern browsers
+
+### Requirement 8
+
+**User Story:** As a user, I want a toggleable dark mode theme, so that I can reduce eye strain and work comfortably in different lighting conditions.
+
+#### Acceptance Criteria
+
+1. THE Web_Note_App SHALL provide a dark mode theme with dark backgrounds and light text
+2. THE Web_Note_App SHALL provide a toggle control to switch between light and dark modes
+3. WHEN a user toggles the theme, THE Web_Note_App SHALL immediately apply the new theme across all interface elements
+4. THE Web_Note_App SHALL persist the user's theme preference in local storage
+5. WHEN the application loads, THE Web_Note_App SHALL restore the user's previously selected theme
