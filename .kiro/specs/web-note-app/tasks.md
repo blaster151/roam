@@ -1,6 +1,8 @@
 # Implementation Plan
 
-- [ ] 1. Set up project structure and core dependencies
+- [x] 1. Set up project structure and core dependencies
+
+
   - Initialize React TypeScript project with Vite for fast development
   - Install core dependencies: Zustand, Dexie.js, Draft.js, React DnD, Fuse.js
   - Configure TypeScript with strict mode and path aliases
@@ -8,13 +10,16 @@
   - _Requirements: 7.1, 7.4_
 
 - [ ] 2. Implement core data models and storage foundation
+
   - [ ] 2.1 Create TypeScript interfaces for Note, LinkEmbed, and SearchResult models
+
     - Define Note interface with id, title, content, timestamps, parentId, order, and links
     - Define LinkEmbed interface for smart web link previews
     - Define SearchResult interface for search functionality
     - _Requirements: 2.5, 3.1, 5.4_
 
   - [ ] 2.2 Implement abstract storage service interface
+
     - Create IStorageService interface for future migration flexibility
     - Define CRUD operations and query methods
     - Include transaction support and error handling patterns
@@ -27,7 +32,9 @@
     - _Requirements: 6.3, 7.2_
 
 - [ ] 3. Create basic note management system
+
   - [ ] 3.1 Implement Zustand store for application state
+
     - Create stores for notes, selected note, sidebar state, search, UI state, and theme
     - Implement actions for note CRUD operations
     - Add state persistence and hydration
@@ -36,12 +43,14 @@
     - _Requirements: 6.1, 6.4, 8.4, 8.5_
 
   - [ ] 3.2 Build Note service with business logic
+
     - Implement note creation, updating, and deletion
     - Add hierarchical relationship management (parent-child with 2-level limit)
     - Implement note ordering and reordering logic
     - _Requirements: 4.4, 6.1_
 
   - [ ] 3.3 Create welcome screen for first-time users
+
     - Build welcome screen component with app introduction and key features
     - Implement first-time user detection using local storage
     - Add dismissible welcome screen that reveals main interface
@@ -56,19 +65,23 @@
     - _Requirements: 1.4, 1.5, 1.6_
 
 - [ ] 4. Build rich text editor with formatting capabilities
+
   - [ ] 4.1 Implement Draft.js editor component
+
     - Set up Draft.js editor with TypeScript integration
     - Configure rich text plugins for bold, italic, and basic formatting
     - Implement real-time rendering of formatted content
     - _Requirements: 1.1, 1.2, 1.9_
 
   - [ ] 4.2 Add Markdown support and content preservation
+
     - Implement Markdown parsing and rendering
     - Add paste handling that preserves rich formatting
     - Create conversion utilities between Draft.js and Markdown
     - _Requirements: 1.1, 1.3_
 
   - [ ] 4.3 Implement image paste functionality
+
     - Add image paste detection and handling
     - Implement image storage in IndexedDB as base64 or blob
     - Create image rendering component within editor
@@ -81,6 +94,7 @@
     - _Requirements: 1.4, 1.5, 1.6_
 
 - [ ] 5. Implement autosave functionality
+
   - [ ] 5.1 Create debounced autosave system
     - Implement 2-second debounced saving after user stops typing
     - Add visual indicators for save status (saving, saved, error)
@@ -88,13 +102,16 @@
     - _Requirements: 6.1, 6.2, 6.4, 6.5_
 
 - [ ] 6. Build sidebar with hierarchical note organization
+
   - [ ] 6.1 Create basic sidebar component with note list
+
     - Display all notes in hierarchical tree structure
     - Implement note selection and active state highlighting
     - Add visual indicators for parent-child relationships
     - _Requirements: 4.1, 4.4_
 
   - [ ] 6.2 Implement drag-and-drop functionality with React DnD
+
     - Add drag-and-drop for note reordering within same level
     - Implement drop-onto-note functionality for creating parent-child relationships
     - Enforce 2-level nesting limit with visual feedback
@@ -108,13 +125,16 @@
     - _Requirements: 4.1, 4.4_
 
 - [ ] 7. Implement bi-directional linking system
+
   - [ ] 7.1 Create Link service for relationship management
+
     - Implement bi-directional link creation and maintenance
     - Add link integrity validation when notes are renamed or deleted
     - Create backlink computation and storage
     - _Requirements: 2.1, 2.2, 2.5_
 
   - [ ] 7.2 Add link creation UI and note reference detection
+
     - Implement link creation through note title references in editor
     - Add autocomplete for existing note titles during link creation
     - Create clickable navigation between linked notes
@@ -127,7 +147,9 @@
     - _Requirements: 2.2, 2.3_
 
 - [ ] 8. Implement smart embed system for web links
+
   - [ ] 8.1 Create Embed service for URL metadata extraction
+
     - Implement URL detection in note content
     - Create metadata extraction using Open Graph and Twitter Card protocols
     - Add caching system for embed data to avoid repeated requests
@@ -135,6 +157,7 @@
     - _Requirements: 3.1, 3.2, 3.3_
 
   - [ ] 8.2 Build Smart Embed component
+
     - Create compact embed display component (3-line height maximum)
     - Display title, description, image, and favicon when available
     - Make embeds clickable to open original URLs
@@ -148,13 +171,16 @@
     - _Requirements: 3.1, 3.5_
 
 - [ ] 9. Build search functionality
+
   - [ ] 9.1 Implement Search service with Fuse.js
+
     - Set up full-text search indexing for all note content
     - Configure fuzzy search with appropriate scoring
     - Implement search result ranking and relevance
     - _Requirements: 5.2, 5.4_
 
   - [ ] 9.2 Create search UI component
+
     - Build search input with real-time results
     - Display search results with note titles and context snippets
     - Implement search term highlighting in results
@@ -168,13 +194,16 @@
     - _Requirements: 5.1, 5.5_
 
 - [ ] 10. Add error handling and recovery systems
+
   - [ ] 10.1 Implement storage error handling
+
     - Add graceful degradation when IndexedDB is unavailable
     - Create fallback to localStorage with reduced functionality
     - Implement user notifications for storage quota exceeded
     - _Requirements: 6.3, 7.2_
 
   - [ ] 10.2 Add editor error recovery
+
     - Implement undo/redo functionality for accidental changes
     - Create content recovery from autosave data
     - Add validation for malformed content and graceful handling
@@ -187,7 +216,9 @@
     - _Requirements: 4.4, 4.5_
 
 - [ ] 11. Implement dark mode theme system
+
   - [ ] 11.1 Create Theme service and CSS custom properties
+
     - Implement Theme service for dark/light mode management
     - Set up CSS custom properties for theme colors
     - Add system theme preference detection
@@ -195,6 +226,7 @@
     - _Requirements: 8.1, 8.3, 8.4, 8.5_
 
   - [ ] 11.2 Build theme toggle component
+
     - Create theme toggle button/switch component
     - Implement immediate theme switching across all interface elements
     - Add visual feedback for current theme state
@@ -209,7 +241,9 @@
     - _Requirements: 8.1, 8.3_
 
 - [ ] 12. Implement responsive design and accessibility
+
   - [ ] 12.1 Create responsive layout with CSS Grid/Flexbox
+
     - Implement responsive sidebar that collapses on mobile
     - Ensure editor remains usable across different screen sizes
     - Add touch-friendly interactions for mobile devices
@@ -222,13 +256,16 @@
     - _Requirements: 7.5_
 
 - [ ] 13. Performance optimization and final integration
+
   - [ ] 13.1 Implement performance optimizations
+
     - Add virtual scrolling for large note lists in sidebar
     - Implement lazy loading of note content
     - Optimize bundle size with code splitting
     - _Requirements: 7.5_
 
   - [ ] 13.2 Final integration and testing
+
     - Connect all components into cohesive application
     - Implement comprehensive error boundaries
     - Add loading states and user feedback throughout the application
