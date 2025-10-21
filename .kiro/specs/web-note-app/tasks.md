@@ -2,30 +2,31 @@
 
 - [x] 1. Set up project structure and core dependencies
 
-
   - Initialize React TypeScript project with Vite for fast development
   - Install core dependencies: Zustand, Dexie.js, Draft.js, React DnD, Fuse.js
   - Configure TypeScript with strict mode and path aliases
   - Set up CSS Modules configuration
   - _Requirements: 7.1, 7.4_
 
-- [ ] 2. Implement core data models and storage foundation
+- [x] 2. Implement core data models and storage foundation
 
-  - [ ] 2.1 Create TypeScript interfaces for Note, LinkEmbed, and SearchResult models
+
+  - [x] 2.1 Create TypeScript interfaces for Note, LinkEmbed, and SearchResult models
 
     - Define Note interface with id, title, content, timestamps, parentId, order, and links
     - Define LinkEmbed interface for smart web link previews
     - Define SearchResult interface for search functionality
     - _Requirements: 2.5, 3.1, 5.4_
 
-  - [ ] 2.2 Implement abstract storage service interface
+  - [x] 2.2 Implement abstract storage service interface
 
     - Create IStorageService interface for future migration flexibility
     - Define CRUD operations and query methods
     - Include transaction support and error handling patterns
     - _Requirements: 6.3, 7.2_
 
-  - [ ] 2.3 Implement IndexedDB storage service with Dexie.js
+  - [x] 2.3 Implement IndexedDB storage service with Dexie.js
+
     - Set up database schema with notes, embeds, and metadata tables
     - Implement CRUD operations for notes with proper indexing
     - Add transaction support and error handling
