@@ -5,13 +5,13 @@
 
 import { useEffect, useCallback } from 'react';
 import { useUIStore, useThemeStore, useNoteStore } from './stores';
-import { WelcomeScreen } from './components';
+import { WelcomeScreen, RichTextEditor } from './components';
 import './App.css';
 
 function App() {
   const { showWelcomeScreen } = useUIStore();
   const { getEffectiveTheme } = useThemeStore();
-  const { getSelectedNote } = useNoteStore();
+  const { getSelectedNote, addNote, selectNote, notes } = useNoteStore();
 
   // Global keyboard shortcuts handler
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
@@ -84,6 +84,26 @@ function App() {
     document.documentElement.classList.add(`${theme}-theme`);
   }, [getEffectiveTheme]);
 
+  // Create a new note
+  const createNewNote = useCallback(() => {
+    const newNote = {
+      id: `note_${Date.now()}`,
+      title: 'Untitled Note',
+      content: '',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      order: notes.length,
+      links: {
+        outbound: [],
+        inbound: []
+      },
+      embeds: []
+    };
+    
+    addNote(newNote);
+    selectNote(newNote.id);
+  }, [addNote, selectNote, notes.length]);
+
   // Show welcome screen for first-time users
   if (showWelcomeScreen) {
     return <WelcomeScreen />;
@@ -103,18 +123,35 @@ function App() {
           
           <div className="sidebar-content">
             <div className="sidebar-actions">
-              <button className="new-note-btn">
+              <button className="new-note-btn" onClick={createNewNote}>
                 + New Note
               </button>
             </div>
             
             <div className="notes-list">
-              <div className="notes-placeholder">
-                <p>No notes yet</p>
-                <p className="notes-placeholder-hint">
-                  Create your first note to get started
-                </p>
-              </div>
+              {notes.length === 0 ? (
+                <div className="notes-placeholder">
+                  <p>No notes yet</p>
+                  <p className="notes-placeholder-hint">
+                    Create your first note to get started
+                  </p>
+                </div>
+              ) : (
+                <div className="notes-items">
+                  {notes.map(note => (
+                    <div 
+                      key={note.id}
+                      className={`note-item ${getSelectedNote()?.id === note.id ? 'selected' : ''}`}
+                      onClick={() => selectNote(note.id)}
+                    >
+                      <div className="note-item-title">{note.title}</div>
+                      <div className="note-item-date">
+                        {note.updatedAt.toLocaleDateString()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </aside>
@@ -123,16 +160,29 @@ function App() {
         <main className="main-content">
           <div className="editor-container">
             {getSelectedNote() ? (
-              <div className="editor-placeholder">
-                <h2>Editor will go here</h2>
-                <p>Selected note: {getSelectedNote()?.title}</p>
+              <div className="editor-wrapper">
+                <div className="note-header">
+                  <input 
+                    type="text" 
+                    className="note-title-input"
+                    placeholder="Note title..."
+                    defaultValue={getSelectedNote()?.title}
+                  />
+                </div>
+                <RichTextEditor
+                  initialContent={getSelectedNote()?.content}
+                  placeholder="Start writing your note..."
+                  autoFocus={true}
+                  supportMarkdown={true}
+                  supportImages={true}
+                />
               </div>
             ) : (
               <div className="no-note-selected">
                 <div className="no-note-content">
                   <h2>Welcome to Web Notes</h2>
                   <p>Select a note from the sidebar or create a new one to start writing.</p>
-                  <button className="create-first-note-btn">
+                  <button className="create-first-note-btn" onClick={createNewNote}>
                     Create Your First Note
                   </button>
                 </div>

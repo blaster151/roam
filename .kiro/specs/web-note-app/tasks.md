@@ -33,7 +33,6 @@
 
 - [x] 3. Create basic note management system
 
-
   - [x] 3.1 Implement Zustand store for application state
 
     - Create stores for notes, selected note, sidebar state, search, UI state, and theme
@@ -66,30 +65,42 @@
     - Integrate welcome screen conditional rendering
     - _Requirements: 1.4, 1.5, 1.6_
 
-- [ ] 4. Build rich text editor with formatting capabilities
+- [x] 4. Build rich text editor with formatting capabilities
 
-  - [ ] 4.1 Implement Draft.js editor component
+  - [x] 4.1 Implement Draft.js editor component
+
+
 
     - Set up Draft.js editor with TypeScript integration
     - Configure rich text plugins for bold, italic, and basic formatting
     - Implement real-time rendering of formatted content
+
     - _Requirements: 1.1, 1.2, 1.9_
 
-  - [ ] 4.2 Add Markdown support and content preservation
+
+
+
+  - [x] 4.2 Add Markdown support and content preservation
 
     - Implement Markdown parsing and rendering
+
     - Add paste handling that preserves rich formatting
     - Create conversion utilities between Draft.js and Markdown
     - _Requirements: 1.1, 1.3_
 
-  - [ ] 4.3 Implement image paste functionality
+  - [x] 4.3 Implement image paste functionality
 
     - Add image paste detection and handling
     - Implement image storage in IndexedDB as base64 or blob
     - Create image rendering component within editor
+
+
+
+
     - _Requirements: 1.7_
 
-  - [ ] 4.4 Add keyboard shortcut handlers for text formatting
+
+  - [x] 4.4 Add keyboard shortcut handlers for text formatting
     - Implement Ctrl+B for bold formatting on selected text
     - Implement Ctrl+I for italic formatting on selected text
     - Implement Ctrl+K for link creation with clipboard URL detection

@@ -3,3 +3,5 @@
  */
 
 export { WelcomeScreen } from './WelcomeScreen';
+export { RichTextEditor, type RichTextEditorProps } from './RichTextEditor';
+export { EditorImage, type EditorImageProps } from './EditorImage';
