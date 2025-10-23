@@ -10,7 +10,6 @@
 
 - [x] 2. Implement core data models and storage foundation
 
-
   - [x] 2.1 Create TypeScript interfaces for Note, LinkEmbed, and SearchResult models
 
     - Define Note interface with id, title, content, timestamps, parentId, order, and links
@@ -32,9 +31,10 @@
     - Add transaction support and error handling
     - _Requirements: 6.3, 7.2_
 
-- [ ] 3. Create basic note management system
+- [x] 3. Create basic note management system
 
-  - [ ] 3.1 Implement Zustand store for application state
+
+  - [x] 3.1 Implement Zustand store for application state
 
     - Create stores for notes, selected note, sidebar state, search, UI state, and theme
     - Implement actions for note CRUD operations
@@ -43,14 +43,14 @@
     - Add theme state management with persistence
     - _Requirements: 6.1, 6.4, 8.4, 8.5_
 
-  - [ ] 3.2 Build Note service with business logic
+  - [x] 3.2 Build Note service with business logic
 
     - Implement note creation, updating, and deletion
     - Add hierarchical relationship management (parent-child with 2-level limit)
     - Implement note ordering and reordering logic
     - _Requirements: 4.4, 6.1_
 
-  - [ ] 3.3 Create welcome screen for first-time users
+  - [x] 3.3 Create welcome screen for first-time users
 
     - Build welcome screen component with app introduction and key features
     - Implement first-time user detection using local storage
@@ -58,7 +58,8 @@
     - Create smooth transition from welcome screen to main app
     - _Requirements: 7.1, 7.5_
 
-  - [ ] 3.4 Create basic App component with routing and keyboard shortcuts
+  - [x] 3.4 Create basic App component with routing and keyboard shortcuts
+
     - Set up main application layout with sidebar and editor areas
     - Implement global keyboard shortcuts (Ctrl+B, Ctrl+I, Ctrl+K)
     - Add basic navigation between notes

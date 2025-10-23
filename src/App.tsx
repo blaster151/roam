@@ -1,35 +1,162 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+/**
+ * Main App component with layout, keyboard shortcuts, and welcome screen
+ * Based on requirements 1.4, 1.5, 1.6
+ */
+
+import { useEffect, useCallback } from 'react';
+import { useUIStore, useThemeStore, useNoteStore } from './stores';
+import { WelcomeScreen } from './components';
+import './App.css';
 
 function App() {
-  const [count, setCount] = useState(0)
+  const { showWelcomeScreen } = useUIStore();
+  const { getEffectiveTheme } = useThemeStore();
+  const { getSelectedNote } = useNoteStore();
+
+  // Global keyboard shortcuts handler
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    // Only handle shortcuts when not in input fields
+    const target = event.target as HTMLElement;
+    const isInputField = target.tagName === 'INPUT' || 
+                        target.tagName === 'TEXTAREA' || 
+                        target.contentEditable === 'true';
+
+    if (event.ctrlKey || event.metaKey) {
+      switch (event.key.toLowerCase()) {
+        case 'b':
+          if (!isInputField) {
+            event.preventDefault();
+            // Bold formatting - will be handled by editor component
+            console.log('Bold shortcut triggered');
+          }
+          break;
+        
+        case 'i':
+          if (!isInputField) {
+            event.preventDefault();
+            // Italic formatting - will be handled by editor component
+            console.log('Italic shortcut triggered');
+          }
+          break;
+        
+        case 'k':
+          if (!isInputField) {
+            event.preventDefault();
+            // Link creation - will be handled by editor component
+            console.log('Link shortcut triggered');
+          }
+          break;
+        
+        case 'n':
+          event.preventDefault();
+          // Create new note
+          console.log('New note shortcut triggered');
+          break;
+        
+        case 'f':
+          event.preventDefault();
+          // Focus search
+          console.log('Search shortcut triggered');
+          break;
+      }
+    }
+    
+    // Escape key handling
+    if (event.key === 'Escape') {
+      // Close search, modals, etc.
+      console.log('Escape key pressed');
+    }
+  }, []);
+
+  // Set up global keyboard shortcuts
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleKeyDown]);
+
+  // Apply theme on mount and theme changes
+  useEffect(() => {
+    const theme = getEffectiveTheme();
+    document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.classList.remove('light-theme', 'dark-theme');
+    document.documentElement.classList.add(`${theme}-theme`);
+  }, [getEffectiveTheme]);
+
+  // Show welcome screen for first-time users
+  if (showWelcomeScreen) {
+    return <WelcomeScreen />;
+  }
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div className="app">
+      <div className="app-layout">
+        {/* Sidebar */}
+        <aside className="sidebar">
+          <div className="sidebar-header">
+            <h1 className="app-title">Web Notes</h1>
+            <button className="theme-toggle" title="Toggle theme">
+              🌙
+            </button>
+          </div>
+          
+          <div className="sidebar-content">
+            <div className="sidebar-actions">
+              <button className="new-note-btn">
+                + New Note
+              </button>
+            </div>
+            
+            <div className="notes-list">
+              <div className="notes-placeholder">
+                <p>No notes yet</p>
+                <p className="notes-placeholder-hint">
+                  Create your first note to get started
+                </p>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        {/* Main content area */}
+        <main className="main-content">
+          <div className="editor-container">
+            {getSelectedNote() ? (
+              <div className="editor-placeholder">
+                <h2>Editor will go here</h2>
+                <p>Selected note: {getSelectedNote()?.title}</p>
+              </div>
+            ) : (
+              <div className="no-note-selected">
+                <div className="no-note-content">
+                  <h2>Welcome to Web Notes</h2>
+                  <p>Select a note from the sidebar or create a new one to start writing.</p>
+                  <button className="create-first-note-btn">
+                    Create Your First Note
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </main>
       </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
+
+      {/* Search overlay - will be implemented later */}
+      <div className="search-overlay" style={{ display: 'none' }}>
+        <div className="search-container">
+          <input 
+            type="text" 
+            placeholder="Search notes..." 
+            className="search-input"
+          />
+          <div className="search-results">
+            {/* Search results will go here */}
+          </div>
+        </div>
       </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    </div>
+  );
 }
 
-export default App
+export default App;
