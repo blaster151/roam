@@ -3,7 +3,7 @@
  * Based on requirements 6.3, 7.2
  */
 
-import Dexie, { type Table } from 'dexie';
+import Dexie, { type Table, type Transaction } from 'dexie';
 import type { Note, LinkEmbed } from '../types';
 import type {
   IStorageService,
@@ -38,9 +38,9 @@ class WebNoteDatabase extends Dexie {
  * IndexedDB transaction wrapper
  */
 class IndexedDBTransaction implements StorageTransaction {
-  private dexieTransaction: any;
-  
-  constructor(dexieTransaction: any) {
+  private dexieTransaction: Transaction;
+
+  constructor(dexieTransaction: Transaction) {
     this.dexieTransaction = dexieTransaction;
   }
 
@@ -375,12 +375,15 @@ export class IndexedDBStorageService implements IStorageService {
 
   async beginTransaction(): Promise<StorageResult<StorageTransaction>> {
     try {
-      const transaction = await this.db.transaction('rw', this.db.notes, this.db.embeds, () => {
-        // Transaction will be created and returned
-      });
-      
-      return { 
-        success: true, 
+      const transaction = await this.db.transaction(
+        'rw',
+        this.db.notes,
+        this.db.embeds,
+        (tx) => tx
+      );
+
+      return {
+        success: true,
         data: new IndexedDBTransaction(transaction)
       };
     } catch (error) {

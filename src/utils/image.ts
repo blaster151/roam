@@ -90,10 +90,10 @@ export function resizeImageIfNeeded(
       const { naturalWidth, naturalHeight } = img;
       
       // Calculate new dimensions while maintaining aspect ratio
-      let { width, height } = calculateResizedDimensions(
-        naturalWidth, 
-        naturalHeight, 
-        maxWidth, 
+      const { width, height } = calculateResizedDimensions(
+        naturalWidth,
+        naturalHeight,
+        maxWidth,
         maxHeight
       );
       
