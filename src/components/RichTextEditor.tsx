@@ -13,7 +13,10 @@ import {
   convertToRaw,
   convertFromRaw,
   Modifier,
-  AtomicBlockUtils
+  AtomicBlockUtils,
+  ContentBlock,
+  ContentState,
+  SelectionState
 } from 'draft-js';
 import type { DraftHandleValue, DraftEditorCommand } from 'draft-js';
 import { draftToMarkdown, markdownToDraft, isMarkdown } from '../utils';
@@ -21,6 +24,63 @@ import { createImageData } from '../utils/image';
 import { EditorImage } from './EditorImage';
 import 'draft-js/dist/Draft.css';
 import './RichTextEditor.css';
+
+interface ImageEntityData {
+  src: string;
+  alt?: string;
+  width?: number;
+  height?: number;
+  id?: string;
+}
+
+const isValidDimension = (dimension: unknown): dimension is number =>
+  typeof dimension === 'number' && Number.isFinite(dimension) && dimension > 0;
+
+const isImageEntityData = (value: unknown): value is ImageEntityData => {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const data = value as Record<string, unknown>;
+  const { src, alt, width, height, id } = data;
+
+  if (typeof src !== 'string' || src.length === 0) {
+    return false;
+  }
+
+  if (alt !== undefined && typeof alt !== 'string') {
+    return false;
+  }
+
+  if (width !== undefined && !isValidDimension(width)) {
+    return false;
+  }
+
+  if (height !== undefined && !isValidDimension(height)) {
+    return false;
+  }
+
+  if (id !== undefined && typeof id !== 'string') {
+    return false;
+  }
+
+  return true;
+};
+
+interface ImageBlockComponentProps {
+  block: ContentBlock;
+  contentState: ContentState;
+  blockProps: {
+    readOnly: boolean;
+    data: ImageEntityData;
+  };
+}
+
+interface ImageBlockRendererConfig {
+  component: React.ComponentType<ImageBlockComponentProps>;
+  editable: boolean;
+  props: ImageBlockComponentProps['blockProps'];
+}
 
 export interface RichTextEditorProps {
   /** Initial content as Draft.js raw content state or Markdown */
@@ -119,30 +179,106 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           break;
       }
     }
-    
+
     return getDefaultKeyBinding(e);
   }, []);
+
+  const handleCreateLink = useCallback(() => {
+    const run = async () => {
+      const selection = editorState.getSelection();
+
+      if (selection.isCollapsed()) {
+        const url = prompt('Enter URL:');
+        if (!url) return;
+
+        const linkText = prompt('Enter link text:', url);
+        if (!linkText) return;
+
+        const contentState = editorState.getCurrentContent();
+        const contentStateWithEntity = contentState.createEntity('LINK', 'MUTABLE', { url });
+        const entityKey = contentStateWithEntity.getLastCreatedEntityKey();
+
+        const newContentState = Modifier.insertText(
+          contentStateWithEntity,
+          selection,
+          linkText,
+          undefined,
+          entityKey
+        );
+
+        const newEditorState = EditorState.push(
+          editorState,
+          newContentState,
+          'insert-characters'
+        );
+
+        handleEditorChange(newEditorState);
+        return;
+      }
+
+      let defaultUrl = '';
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.readText) {
+        try {
+          const clipboardText = await navigator.clipboard.readText();
+          if (
+            clipboardText &&
+            (clipboardText.startsWith('http://') || clipboardText.startsWith('https://'))
+          ) {
+            defaultUrl = clipboardText;
+          }
+        } catch {
+          // Ignore clipboard errors
+        }
+      }
+
+      const url = prompt('Enter URL:', defaultUrl);
+      if (!url) return;
+
+      const contentState = editorState.getCurrentContent();
+      const contentStateWithEntity = contentState.createEntity('LINK', 'MUTABLE', { url });
+      const entityKey = contentStateWithEntity.getLastCreatedEntityKey();
+
+      const newContentState = Modifier.applyEntity(
+        contentStateWithEntity,
+        selection,
+        entityKey
+      );
+
+      const newEditorState = EditorState.push(
+        editorState,
+        newContentState,
+        'apply-entity'
+      );
+
+      handleEditorChange(newEditorState);
+    };
+
+    void run();
+  }, [editorState, handleEditorChange]);
 
   // Handle key commands
   const handleKeyCommand = useCallback((
     command: DraftEditorCommand | string,
-    editorState: EditorState
+    editorStateParam: EditorState
   ): DraftHandleValue => {
     // Handle rich text commands
-    const newState = RichUtils.handleKeyCommand(editorState, command as DraftEditorCommand);
-    
+    const newState = RichUtils.handleKeyCommand(
+      editorStateParam,
+      command as DraftEditorCommand
+    );
+
     if (newState) {
       handleEditorChange(newState);
       return 'handled';
     }
-    
+
     // Handle custom commands
     switch (command) {
       case 'bold':
-        handleEditorChange(RichUtils.toggleInlineStyle(editorState, 'BOLD'));
+        handleEditorChange(RichUtils.toggleInlineStyle(editorStateParam, 'BOLD'));
         return 'handled';
       case 'italic':
-        handleEditorChange(RichUtils.toggleInlineStyle(editorState, 'ITALIC'));
+        handleEditorChange(RichUtils.toggleInlineStyle(editorStateParam, 'ITALIC'));
         return 'handled';
       case 'link':
         handleCreateLink();
@@ -150,7 +286,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       default:
         return 'not-handled';
     }
-  }, [handleEditorChange]);
+  }, [handleCreateLink, handleEditorChange]);
 
   // Focus the editor
   const focusEditor = useCallback(() => {
@@ -184,77 +320,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   }, [editorState, handleEditorChange]);
 
   // Handle link creation
-  const handleCreateLink = useCallback(() => {
-    const selection = editorState.getSelection();
-    
-    if (selection.isCollapsed()) {
-      // No text selected, prompt for URL and text
-      const url = prompt('Enter URL:');
-      if (!url) return;
-      
-      const linkText = prompt('Enter link text:', url);
-      if (!linkText) return;
-      
-      // Insert link text with entity
-      const contentState = editorState.getCurrentContent();
-      const contentStateWithEntity = contentState.createEntity('LINK', 'MUTABLE', { url });
-      const entityKey = contentStateWithEntity.getLastCreatedEntityKey();
-      
-      const newContentState = Modifier.insertText(
-        contentStateWithEntity,
-        selection,
-        linkText,
-        undefined,
-        entityKey
-      );
-      
-      const newEditorState = EditorState.push(
-        editorState,
-        newContentState,
-        'insert-characters'
-      );
-      
-      handleEditorChange(newEditorState);
-    } else {
-      // Text is selected, prompt for URL
-      
-      // Try to get URL from clipboard
-      let defaultUrl = '';
-      if (navigator.clipboard && navigator.clipboard.readText) {
-        navigator.clipboard.readText().then(clipboardText => {
-          if (clipboardText && (clipboardText.startsWith('http://') || clipboardText.startsWith('https://'))) {
-            // Use clipboard URL as default if it looks like a URL
-          }
-        }).catch(() => {
-          // Ignore clipboard errors
-        });
-      }
-      
-      const url = prompt('Enter URL:', defaultUrl);
-      if (!url) return;
-      
-      // Create link entity
-      const contentState = editorState.getCurrentContent();
-      const contentStateWithEntity = contentState.createEntity('LINK', 'MUTABLE', { url });
-      const entityKey = contentStateWithEntity.getLastCreatedEntityKey();
-      
-      // Apply entity to selected text
-      const newContentState = Modifier.applyEntity(
-        contentStateWithEntity,
-        selection,
-        entityKey
-      );
-      
-      const newEditorState = EditorState.push(
-        editorState,
-        newContentState,
-        'apply-entity'
-      );
-      
-      handleEditorChange(newEditorState);
-    }
-  }, [editorState, handleEditorChange]);
-
   // Handle paste events
   const handlePastedText = useCallback((text: string, html?: string): DraftHandleValue => {
     // If markdown is supported and the pasted text looks like markdown, parse it
@@ -377,31 +442,46 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
   // Handle drop events for images (synchronous handler)
   const handleDroppedFiles = useCallback((
-    _selection: any,
+    _selection: SelectionState,
     files: Blob[]
   ): DraftHandleValue => {
     return handlePastedFiles(files);
   }, [handlePastedFiles]);
 
   // Custom block renderer for images
-  const blockRendererFn = useCallback((block: any) => {
-    if (block.getType() === 'atomic') {
-      const entity = editorState.getCurrentContent().getEntity(block.getEntityAt(0));
-      
-      if (entity && entity.getType() === 'IMAGE') {
-        return {
-          component: ImageBlock,
-          editable: false,
-          props: {
-            entity,
-            readOnly
+  const blockRendererFn = useCallback(
+    (block: ContentBlock): ImageBlockRendererConfig | null => {
+      if (block.getType() === 'atomic') {
+        const entityKey = block.getEntityAt(0);
+        if (!entityKey) {
+          return null;
+        }
+
+        const entity = editorState.getCurrentContent().getEntity(entityKey);
+
+        if (entity.getType() === 'IMAGE') {
+          const data = entity.getData();
+
+          if (!isImageEntityData(data)) {
+            console.warn('Encountered image entity with invalid data. Skipping render.', data);
+            return null;
           }
-        };
+
+          return {
+            component: ImageBlock,
+            editable: false,
+            props: {
+              readOnly,
+              data
+            }
+          };
+        }
       }
-    }
-    
-    return null;
-  }, [editorState, readOnly]);
+
+      return null;
+    },
+    [editorState, readOnly]
+  );
 
 
 
@@ -467,23 +547,23 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 };
 
 // Image block component for atomic blocks
-interface ImageBlockProps {
-  block: any;
-  contentState: any;
-  entity: any;
-  readOnly: boolean;
-}
+const ImageBlock: React.FC<ImageBlockComponentProps> = ({
+  block,
+  blockProps
+}) => {
+  const entityKey = block.getEntityAt(0);
 
-const ImageBlock: React.FC<ImageBlockProps> = ({ entity, readOnly }) => {
-  const data = entity.getData();
-  
+  if (!entityKey) {
+    return null;
+  }
+
   return (
     <EditorImage
-      src={data.src}
-      alt={data.alt}
-      width={data.width}
-      height={data.height}
-      readOnly={readOnly}
+      src={blockProps.data.src}
+      alt={blockProps.data.alt}
+      width={blockProps.data.width}
+      height={blockProps.data.height}
+      readOnly={blockProps.readOnly}
     />
   );
 };
