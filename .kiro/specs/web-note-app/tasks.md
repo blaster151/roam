@@ -106,13 +106,23 @@
     - Implement Ctrl+K for link creation with clipboard URL detection
     - _Requirements: 1.4, 1.5, 1.6_
 
-- [ ] 5. Implement autosave functionality
+- [x] 5. Implement autosave functionality
 
-  - [ ] 5.1 Create debounced autosave system
+- [x] 5.1 Create debounced autosave system
     - Implement 2-second debounced saving after user stops typing
     - Add visual indicators for save status (saving, saved, error)
     - Create recovery mechanism for unsaved changes on app restart
     - _Requirements: 6.1, 6.2, 6.4, 6.5_
+
+- [x] 5.2 Harden autosave around navigation events
+    - Flush pending note edits when switching selections or exiting the app
+    - Add lifecycle hooks for `beforeunload` and background visibility changes
+    - _Requirements: 6.1, 6.5_
+
+- [x] 5.3 Surface unsaved state in the interface
+    - Highlight notes with in-progress edits within the sidebar list
+    - Persist unsaved indicators using centralized store metadata
+    - _Requirements: 6.4, 6.5_
 
 - [ ] 6. Build sidebar with hierarchical note organization
 
