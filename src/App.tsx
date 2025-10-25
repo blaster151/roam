@@ -3,15 +3,338 @@
  * Based on requirements 1.4, 1.5, 1.6
  */
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
+import type { ChangeEvent } from 'react';
 import { useUIStore, useThemeStore, useNoteStore } from './stores';
 import { WelcomeScreen, RichTextEditor } from './components';
 import './App.css';
 
+const formatDateDisplay = (value: Date | string) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return date.toLocaleDateString();
+};
+
+const formatSaveTimestamp = (timestamp: number | null) => {
+  if (!timestamp) {
+    return '';
+  }
+
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
 function App() {
   const { showWelcomeScreen } = useUIStore();
   const { getEffectiveTheme } = useThemeStore();
-  const { getSelectedNote, addNote, selectNote, notes } = useNoteStore();
+  const {
+    getSelectedNote,
+    getNoteById,
+    addNote,
+    selectNote,
+    notes,
+    updateNote,
+    saveStatus,
+    saveError,
+    lastSavedAt,
+    unsavedChanges,
+    setSaveStatus,
+    setSaveError,
+    setLastSavedAt,
+    recordUnsavedChanges,
+    clearUnsavedChanges,
+    getUnsavedChanges
+  } = useNoteStore();
+
+  const selectedNote = getSelectedNote();
+  const selectedNoteId = selectedNote?.id ?? null;
+
+  const [draftTitle, setDraftTitle] = useState('');
+  const [draftContent, setDraftContent] = useState('');
+  const [editorKey, setEditorKey] = useState(0);
+
+  const draftTitleRef = useRef('');
+  const draftContentRef = useRef('');
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previousNoteIdRef = useRef<string | null>(null);
+
+  const cancelAutosaveTimer = useCallback(() => {
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+  }, []);
+
+  const flushAutosave = useCallback(
+    (targetNoteId?: string) => {
+      const noteIdToFlush = targetNoteId ?? selectedNoteId;
+
+      if (!noteIdToFlush) {
+        if (targetNoteId === undefined) {
+          cancelAutosaveTimer();
+        }
+        return;
+      }
+
+      const isCurrentNote = noteIdToFlush === selectedNoteId;
+
+      if (isCurrentNote) {
+        cancelAutosaveTimer();
+      }
+
+      const pendingChanges = getUnsavedChanges(noteIdToFlush);
+      if (!pendingChanges) {
+        return;
+      }
+
+      const baselineNote = getNoteById(noteIdToFlush);
+
+      if (!baselineNote && !isCurrentNote) {
+        clearUnsavedChanges(noteIdToFlush);
+        return;
+      }
+
+      const resolvedTitle =
+        pendingChanges.title ??
+        (isCurrentNote
+          ? draftTitleRef.current
+          : baselineNote?.title ?? '');
+
+      const resolvedContent =
+        pendingChanges.content ??
+        (isCurrentNote
+          ? draftContentRef.current
+          : baselineNote?.content ?? '');
+
+      if (
+        baselineNote &&
+        baselineNote.title === resolvedTitle &&
+        baselineNote.content === resolvedContent
+      ) {
+        clearUnsavedChanges(noteIdToFlush);
+
+        if (isCurrentNote) {
+          setLastSavedAt(Date.now());
+          setSaveStatus('saved');
+          setSaveError(null);
+        }
+
+        return;
+      }
+
+      try {
+        updateNote(noteIdToFlush, {
+          title: resolvedTitle,
+          content: resolvedContent
+        });
+
+        clearUnsavedChanges(noteIdToFlush);
+
+        if (isCurrentNote) {
+          setLastSavedAt(Date.now());
+          setSaveStatus('saved');
+          setSaveError(null);
+        }
+      } catch (error) {
+        console.error('Failed to save note', error);
+
+        if (isCurrentNote) {
+          setSaveStatus('error');
+          setSaveError(
+            error instanceof Error ? error.message : 'Failed to save changes'
+          );
+        }
+
+        recordUnsavedChanges(noteIdToFlush, {
+          title: resolvedTitle,
+          content: resolvedContent
+        });
+      }
+    },
+    [
+      cancelAutosaveTimer,
+      clearUnsavedChanges,
+      getNoteById,
+      getUnsavedChanges,
+      recordUnsavedChanges,
+      selectedNoteId,
+      setLastSavedAt,
+      setSaveError,
+      setSaveStatus,
+      updateNote
+    ]
+  );
+
+  const scheduleAutosave = useCallback((noteId: string, titleValue: string, contentValue: string) => {
+    cancelAutosaveTimer();
+
+    recordUnsavedChanges(noteId, {
+      title: titleValue,
+      content: contentValue
+    });
+
+    const currentNote = getSelectedNote();
+    if (
+      currentNote &&
+      currentNote.id === noteId &&
+      currentNote.title === titleValue &&
+      currentNote.content === contentValue
+    ) {
+      clearUnsavedChanges(noteId);
+      setSaveStatus('saved');
+      setSaveError(null);
+      return;
+    }
+
+    setSaveStatus('saving');
+    setSaveError(null);
+
+    autosaveTimerRef.current = setTimeout(() => {
+      try {
+        updateNote(noteId, {
+          title: titleValue,
+          content: contentValue
+        });
+
+        clearUnsavedChanges(noteId);
+        setLastSavedAt(Date.now());
+        setSaveStatus('saved');
+        setSaveError(null);
+      } catch (error) {
+        console.error('Failed to save note', error);
+        setSaveStatus('error');
+        setSaveError(error instanceof Error ? error.message : 'Failed to save changes');
+        recordUnsavedChanges(noteId, {
+          title: titleValue,
+          content: contentValue
+        });
+      } finally {
+        autosaveTimerRef.current = null;
+      }
+    }, 2000);
+  }, [
+    cancelAutosaveTimer,
+    clearUnsavedChanges,
+    getSelectedNote,
+    recordUnsavedChanges,
+    setLastSavedAt,
+    setSaveError,
+    setSaveStatus,
+    updateNote
+  ]);
+
+  const flushAllUnsaved = useCallback(() => {
+    flushAutosave();
+    Object.keys(unsavedChanges).forEach(noteId => {
+      if (noteId !== selectedNoteId) {
+        flushAutosave(noteId);
+      }
+    });
+  }, [flushAutosave, selectedNoteId, unsavedChanges]);
+
+  useEffect(() => () => {
+    flushAllUnsaved();
+  }, [flushAllUnsaved]);
+
+  useEffect(() => {
+    const previousId = previousNoteIdRef.current;
+    if (previousId && previousId !== selectedNoteId) {
+      flushAutosave(previousId);
+    }
+
+    previousNoteIdRef.current = selectedNoteId;
+  }, [flushAutosave, selectedNoteId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      return;
+    }
+
+    const handleBeforeUnload = () => {
+      flushAllUnsaved();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        flushAllUnsaved();
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [flushAllUnsaved]);
+
+  useEffect(() => {
+    if (!selectedNoteId) {
+      cancelAutosaveTimer();
+      setDraftTitle('');
+      setDraftContent('');
+      draftTitleRef.current = '';
+      draftContentRef.current = '';
+      setSaveStatus('idle');
+      setSaveError(null);
+      setLastSavedAt(null);
+      return;
+    }
+
+    cancelAutosaveTimer();
+
+    const currentNote = getSelectedNote();
+    if (!currentNote) {
+      setDraftTitle('');
+      setDraftContent('');
+      draftTitleRef.current = '';
+      draftContentRef.current = '';
+      setSaveStatus('idle');
+      setSaveError(null);
+      setLastSavedAt(null);
+      return;
+    }
+
+    const unsaved = getUnsavedChanges(selectedNoteId);
+    const nextTitle = unsaved?.title ?? currentNote.title;
+    const nextContent = unsaved?.content ?? currentNote.content;
+
+    setDraftTitle(nextTitle);
+    setDraftContent(nextContent);
+    draftTitleRef.current = nextTitle;
+    draftContentRef.current = nextContent;
+    setEditorKey((key) => key + 1);
+
+    if (unsaved) {
+      setSaveStatus('error');
+      setSaveError('Unsaved changes restored');
+      setLastSavedAt(null);
+    } else {
+      setSaveStatus('saved');
+      setSaveError(null);
+      setLastSavedAt(
+        currentNote.updatedAt instanceof Date
+          ? currentNote.updatedAt.getTime()
+          : new Date(currentNote.updatedAt).getTime()
+      );
+    }
+  }, [
+    cancelAutosaveTimer,
+    getSelectedNote,
+    getUnsavedChanges,
+    selectedNoteId,
+    setLastSavedAt,
+    setSaveError,
+    setSaveStatus
+  ]);
 
   // Global keyboard shortcuts handler
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
@@ -104,9 +427,48 @@ function App() {
     selectNote(newNote.id);
   }, [addNote, selectNote, notes.length]);
 
+  const handleTitleChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    setDraftTitle(value);
+    draftTitleRef.current = value;
+
+    if (selectedNoteId) {
+      scheduleAutosave(selectedNoteId, value, draftContentRef.current);
+    }
+  }, [scheduleAutosave, selectedNoteId]);
+
+  const handleContentChange = useCallback((content: string) => {
+    setDraftContent(content);
+    draftContentRef.current = content;
+
+    if (selectedNoteId) {
+      scheduleAutosave(selectedNoteId, draftTitleRef.current, content);
+    }
+  }, [scheduleAutosave, selectedNoteId]);
+
   // Show welcome screen for first-time users
   if (showWelcomeScreen) {
     return <WelcomeScreen />;
+  }
+
+  const saveStatusClass = saveStatus === 'idle' ? 'saved' : saveStatus;
+  let saveStatusMessage = '';
+
+  switch (saveStatus) {
+    case 'saving':
+      saveStatusMessage = 'Saving changes…';
+      break;
+    case 'saved':
+    case 'idle':
+      saveStatusMessage = lastSavedAt
+        ? `Saved at ${formatSaveTimestamp(lastSavedAt)}`
+        : 'All changes saved';
+      break;
+    case 'error':
+      saveStatusMessage = saveError || 'Failed to save changes';
+      break;
+    default:
+      saveStatusMessage = '';
   }
 
   return (
@@ -138,18 +500,31 @@ function App() {
                 </div>
               ) : (
                 <div className="notes-items">
-                  {notes.map(note => (
-                    <div 
-                      key={note.id}
-                      className={`note-item ${getSelectedNote()?.id === note.id ? 'selected' : ''}`}
-                      onClick={() => selectNote(note.id)}
-                    >
-                      <div className="note-item-title">{note.title}</div>
-                      <div className="note-item-date">
-                        {note.updatedAt.toLocaleDateString()}
+                  {notes.map(note => {
+                    const hasUnsavedChanges = Boolean(unsavedChanges[note.id]);
+
+                    return (
+                      <div
+                        key={note.id}
+                        className={`note-item ${selectedNoteId === note.id ? 'selected' : ''}`}
+                        onClick={() => selectNote(note.id)}
+                      >
+                        <div className="note-item-header">
+                          <div className="note-item-title">{note.title}</div>
+                          <span
+                            className={`note-item-unsaved-indicator ${hasUnsavedChanges ? 'is-visible' : ''}`}
+                            role={hasUnsavedChanges ? 'img' : undefined}
+                            aria-label={hasUnsavedChanges ? 'Unsaved changes' : undefined}
+                            aria-hidden={hasUnsavedChanges ? undefined : true}
+                            title={hasUnsavedChanges ? 'Unsaved changes' : undefined}
+                          />
+                        </div>
+                        <div className="note-item-date">
+                          {formatDateDisplay(note.updatedAt)}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -159,22 +534,29 @@ function App() {
         {/* Main content area */}
         <main className="main-content">
           <div className="editor-container">
-            {getSelectedNote() ? (
+            {selectedNote ? (
               <div className="editor-wrapper">
                 <div className="note-header">
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     className="note-title-input"
                     placeholder="Note title..."
-                    defaultValue={getSelectedNote()?.title}
+                    value={draftTitle}
+                    onChange={handleTitleChange}
                   />
+                  <div className={`save-status save-status-${saveStatusClass}`} role="status" aria-live="polite">
+                    <span className="save-status-indicator" aria-hidden="true" />
+                    <span className="save-status-message">{saveStatusMessage}</span>
+                  </div>
                 </div>
                 <RichTextEditor
-                  initialContent={getSelectedNote()?.content}
+                  key={selectedNoteId ? `${selectedNoteId}-${editorKey}` : 'editor'}
+                  initialContent={draftContent}
                   placeholder="Start writing your note..."
                   autoFocus={true}
                   supportMarkdown={true}
                   supportImages={true}
+                  onChange={handleContentChange}
                 />
               </div>
             ) : (
