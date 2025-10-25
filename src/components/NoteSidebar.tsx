@@ -1,9 +1,10 @@
 import { useMemo, useCallback, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { ChangeEvent, ReactNode } from 'react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import type { Note } from '../types';
 import { useNoteStore, useUIStore } from '../stores';
+import { createNotesBackup, parseNotesBackup } from '../utils';
 import './NoteSidebar.css';
 
 const NOTE_DRAG_TYPE = 'note-item';
@@ -257,10 +258,96 @@ export const NoteSidebar = ({ onCreateNote, onToggleTheme }: NoteSidebarProps) =
   const selectedNoteId = useNoteStore((state) => state.selectedNoteId);
   const unsavedChanges = useNoteStore((state) => state.unsavedChanges);
   const moveNote = useNoteStore((state) => state.moveNote);
+  const setNotes = useNoteStore((state) => state.setNotes);
+  const setSaveStatus = useNoteStore((state) => state.setSaveStatus);
+  const setSaveError = useNoteStore((state) => state.setSaveError);
+  const setLastSavedAt = useNoteStore((state) => state.setLastSavedAt);
 
   const toggleNoteCollapsed = useUIStore((state) => state.toggleNoteCollapsed);
   const isNoteCollapsed = useUIStore((state) => state.isNoteCollapsed);
   const setNoteCollapsed = useUIStore((state) => state.setNoteCollapsed);
+
+  const backupInputRef = useRef<HTMLInputElement | null>(null);
+  const [backupMessage, setBackupMessage] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
+  const [isProcessingBackup, setIsProcessingBackup] = useState(false);
+
+  const applyImportedNotes = useCallback(
+    (importedNotes: Note[]) => {
+      setNotes(importedNotes);
+      if (importedNotes.length > 0) {
+        selectNote(importedNotes[0].id);
+      } else {
+        selectNote(null);
+      }
+
+      setSaveStatus('saved');
+      setSaveError(null);
+      setLastSavedAt(Date.now());
+      useNoteStore.setState({ unsavedChanges: {} });
+    },
+    [selectNote, setLastSavedAt, setNotes, setSaveError, setSaveStatus]
+  );
+
+  const handleExportNotes = useCallback(() => {
+    const backup = createNotesBackup(notes);
+    const blob = new Blob([JSON.stringify(backup, null, 2)], {
+      type: 'application/json'
+    });
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const downloadLink = document.createElement('a');
+    downloadLink.href = URL.createObjectURL(blob);
+    downloadLink.download = `web-notes-backup-${timestamp}.json`;
+    downloadLink.rel = 'noopener';
+    downloadLink.click();
+    URL.revokeObjectURL(downloadLink.href);
+
+    setBackupMessage({ type: 'success', text: 'Backup downloaded to your device.' });
+  }, [notes]);
+
+  const handleImportClick = useCallback(() => {
+    setBackupMessage(null);
+    backupInputRef.current?.click();
+  }, []);
+
+  const handleImportChange = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) {
+        return;
+      }
+
+      setIsProcessingBackup(true);
+      setBackupMessage(null);
+
+      try {
+        const content = await file.text();
+        const { notes: importedNotes, metadata } = parseNotesBackup(content);
+
+        applyImportedNotes(importedNotes);
+        setBackupMessage({
+          type: 'success',
+          text:
+            metadata.noteCount === 1
+              ? 'Imported 1 note successfully.'
+              : `Imported ${metadata.noteCount} notes successfully.`
+        });
+      } catch (error) {
+        console.error('Failed to import backup', error);
+        setBackupMessage({
+          type: 'error',
+          text: error instanceof Error ? error.message : 'Unable to import the selected file.'
+        });
+      } finally {
+        setIsProcessingBackup(false);
+        event.target.value = '';
+      }
+    },
+    [applyImportedNotes]
+  );
 
   const notesByParent = useMemo(() => {
     const map = new Map<string | null, Note[]>();
@@ -359,15 +446,44 @@ export const NoteSidebar = ({ onCreateNote, onToggleTheme }: NoteSidebarProps) =
       </div>
 
       <div className="sidebar-content">
-        <div className="sidebar-actions">
-          <button className="new-note-btn" onClick={onCreateNote}>
-            + New Note
+      <div className="sidebar-actions">
+        <button className="new-note-btn" onClick={onCreateNote}>
+          + New Note
+        </button>
+        <div className="sidebar-secondary-actions">
+          <button
+            type="button"
+            className="sidebar-secondary-button"
+            onClick={handleExportNotes}
+          >
+            Export notes
           </button>
+          <button
+            type="button"
+            className="sidebar-secondary-button"
+            onClick={handleImportClick}
+            disabled={isProcessingBackup}
+          >
+            {isProcessingBackup ? 'Importing…' : 'Import backup'}
+          </button>
+          <input
+            ref={backupInputRef}
+            type="file"
+            accept="application/json"
+            className="sidebar-import-input"
+            onChange={handleImportChange}
+          />
         </div>
+        {backupMessage ? (
+          <p className={`sidebar-backup-message sidebar-backup-message-${backupMessage.type}`}>
+            {backupMessage.text}
+          </p>
+        ) : null}
+      </div>
 
-        <div className="notes-list">
-          {rootNotes.length === 0 ? (
-            <div className="notes-placeholder">
+      <div className="notes-list">
+        {rootNotes.length === 0 ? (
+          <div className="notes-placeholder">
               <p>No notes yet</p>
               <p className="notes-placeholder-hint">Create your first note to get started</p>
             </div>

@@ -20,3 +20,11 @@ export {
   createImageData,
   type ImageData
 } from './image';
+
+export {
+  createNotesBackup,
+  parseNotesBackup,
+  NOTES_BACKUP_VERSION,
+  type NotesBackupFile,
+  type ParsedNotesBackup
+} from './backup';
