@@ -6,17 +6,8 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { useUIStore, useThemeStore, useNoteStore } from './stores';
-import { WelcomeScreen, RichTextEditor } from './components';
+import { WelcomeScreen, RichTextEditor, NoteSidebar } from './components';
 import './App.css';
-
-const formatDateDisplay = (value: Date | string) => {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return '';
-  }
-
-  return date.toLocaleDateString();
-};
 
 const formatSaveTimestamp = (timestamp: number | null) => {
   if (!timestamp) {
@@ -33,13 +24,13 @@ const formatSaveTimestamp = (timestamp: number | null) => {
 
 function App() {
   const { showWelcomeScreen } = useUIStore();
-  const { getEffectiveTheme } = useThemeStore();
+  const { getEffectiveTheme, toggleTheme } = useThemeStore();
   const {
     getSelectedNote,
     getNoteById,
     addNote,
     selectNote,
-    notes,
+    getRootNotes,
     updateNote,
     saveStatus,
     saveError,
@@ -409,23 +400,24 @@ function App() {
 
   // Create a new note
   const createNewNote = useCallback(() => {
+    const rootNotes = getRootNotes();
     const newNote = {
       id: `note_${Date.now()}`,
       title: 'Untitled Note',
       content: '',
       createdAt: new Date(),
       updatedAt: new Date(),
-      order: notes.length,
+      order: rootNotes.length,
       links: {
         outbound: [],
         inbound: []
       },
       embeds: []
     };
-    
+
     addNote(newNote);
     selectNote(newNote.id);
-  }, [addNote, selectNote, notes.length]);
+  }, [addNote, getRootNotes, selectNote]);
 
   const handleTitleChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
@@ -475,61 +467,7 @@ function App() {
     <div className="app">
       <div className="app-layout">
         {/* Sidebar */}
-        <aside className="sidebar">
-          <div className="sidebar-header">
-            <h1 className="app-title">Web Notes</h1>
-            <button className="theme-toggle" title="Toggle theme">
-              🌙
-            </button>
-          </div>
-          
-          <div className="sidebar-content">
-            <div className="sidebar-actions">
-              <button className="new-note-btn" onClick={createNewNote}>
-                + New Note
-              </button>
-            </div>
-            
-            <div className="notes-list">
-              {notes.length === 0 ? (
-                <div className="notes-placeholder">
-                  <p>No notes yet</p>
-                  <p className="notes-placeholder-hint">
-                    Create your first note to get started
-                  </p>
-                </div>
-              ) : (
-                <div className="notes-items">
-                  {notes.map(note => {
-                    const hasUnsavedChanges = Boolean(unsavedChanges[note.id]);
-
-                    return (
-                      <div
-                        key={note.id}
-                        className={`note-item ${selectedNoteId === note.id ? 'selected' : ''}`}
-                        onClick={() => selectNote(note.id)}
-                      >
-                        <div className="note-item-header">
-                          <div className="note-item-title">{note.title}</div>
-                          <span
-                            className={`note-item-unsaved-indicator ${hasUnsavedChanges ? 'is-visible' : ''}`}
-                            role={hasUnsavedChanges ? 'img' : undefined}
-                            aria-label={hasUnsavedChanges ? 'Unsaved changes' : undefined}
-                            aria-hidden={hasUnsavedChanges ? undefined : true}
-                            title={hasUnsavedChanges ? 'Unsaved changes' : undefined}
-                          />
-                        </div>
-                        <div className="note-item-date">
-                          {formatDateDisplay(note.updatedAt)}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </aside>
+        <NoteSidebar onCreateNote={createNewNote} onToggleTheme={toggleTheme} />
 
         {/* Main content area */}
         <main className="main-content">

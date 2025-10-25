@@ -39,6 +39,7 @@ export interface NoteState {
   setLastSavedAt: (timestamp: number | null) => void;
   recordUnsavedChanges: (id: string, draft: Partial<Omit<NoteDraft, 'updatedAt'>>) => void;
   clearUnsavedChanges: (id: string) => void;
+  moveNote: (id: string, targetParentId: string | null, targetIndex: number) => void;
 
   // Computed getters
   getSelectedNote: () => Note | null;
@@ -121,6 +122,106 @@ export const useNoteStore = create<NoteState>()(
         delete updated[id];
         return { unsavedChanges: updated };
       }),
+
+      moveNote: (id, targetParentId, targetIndex) =>
+        set((state) => {
+          const normalizeParent = (value?: string | null) => value ?? null;
+
+          const existingNote = state.notes.find(note => note.id === id);
+          if (!existingNote) {
+            return {} as Partial<NoteState>;
+          }
+
+          if (targetParentId === id) {
+            return {} as Partial<NoteState>;
+          }
+
+          // Prevent circular references by walking up the parent chain
+          if (targetParentId) {
+            let currentParentId: string | null | undefined = targetParentId;
+            while (currentParentId) {
+              if (currentParentId === id) {
+                return {} as Partial<NoteState>;
+              }
+
+              const parentNote = state.notes.find(note => note.id === currentParentId);
+              if (!parentNote) {
+                break;
+              }
+
+              currentParentId = parentNote.parentId ?? null;
+            }
+          }
+
+          // Enforce two-level hierarchy (root -> child)
+          if (targetParentId) {
+            const parentNote = state.notes.find(note => note.id === targetParentId);
+            if (!parentNote || parentNote.parentId) {
+              return {} as Partial<NoteState>;
+            }
+          }
+
+          const sourceParentId = normalizeParent(existingNote.parentId);
+          const destinationParentId = normalizeParent(targetParentId);
+
+          const adjustedIndex = Math.max(0, targetIndex);
+
+          // Clone notes to avoid mutating original state
+          const clonedNotes = state.notes.map(note => ({ ...note }));
+          const noteIndex = clonedNotes.findIndex(note => note.id === id);
+
+          if (noteIndex === -1) {
+            return {} as Partial<NoteState>;
+          }
+
+          const noteToMove = clonedNotes[noteIndex];
+          const originalOrder = noteToMove.order;
+          clonedNotes.splice(noteIndex, 1);
+
+          let insertionIndex = adjustedIndex;
+          if (sourceParentId === destinationParentId && insertionIndex > originalOrder) {
+            insertionIndex -= 1;
+          }
+
+          const reorderSiblings = (notes: Note[], parentId: string | null) => {
+            const siblings = notes
+              .filter(note => normalizeParent(note.parentId) === parentId)
+              .sort((a, b) => a.order - b.order);
+
+            siblings.forEach((sibling, index) => {
+              sibling.order = index;
+            });
+          };
+
+          reorderSiblings(clonedNotes, sourceParentId);
+
+          const destinationSiblings = clonedNotes
+            .filter(note => normalizeParent(note.parentId) === destinationParentId)
+            .sort((a, b) => a.order - b.order);
+
+          const clampedIndex = Math.min(Math.max(0, insertionIndex), destinationSiblings.length);
+
+          const movedNote: Note = {
+            ...noteToMove,
+            parentId: targetParentId ?? undefined,
+            order: clampedIndex,
+            updatedAt: new Date()
+          };
+
+          destinationSiblings.splice(clampedIndex, 0, movedNote);
+
+          destinationSiblings.forEach((sibling, index) => {
+            sibling.order = index;
+          });
+
+          const remainingNotes = clonedNotes.filter(
+            note => normalizeParent(note.parentId) !== destinationParentId
+          );
+
+          return {
+            notes: [...remainingNotes, ...destinationSiblings]
+          };
+        }),
 
       // Computed getters
       getSelectedNote: () => {
