@@ -6,7 +6,7 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { useUIStore, useThemeStore, useNoteStore } from './stores';
-import { WelcomeScreen, RichTextEditor, NoteSidebar } from './components';
+import { WelcomeScreen, RichTextEditor, NoteSidebar, BacklinksPanel } from './components';
 import './App.css';
 
 const formatSaveTimestamp = (timestamp: number | null) => {
@@ -43,6 +43,7 @@ function App() {
     clearUnsavedChanges,
     getUnsavedChanges
   } = useNoteStore();
+  const notes = useNoteStore((state) => state.notes);
 
   const selectedNote = getSelectedNote();
   const selectedNoteId = selectedNote?.id ?? null;
@@ -494,8 +495,12 @@ function App() {
                   autoFocus={true}
                   supportMarkdown={true}
                   supportImages={true}
+                  notes={notes}
+                  currentNoteId={selectedNoteId}
+                  onNoteLinkClick={selectNote}
                   onChange={handleContentChange}
                 />
+                <BacklinksPanel noteId={selectedNoteId} notes={notes} onNavigate={selectNote} />
               </div>
             ) : (
               <div className="no-note-selected">

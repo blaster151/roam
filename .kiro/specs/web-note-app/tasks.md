@@ -147,23 +147,23 @@
     - Persist expand/collapse state in local storage
     - _Requirements: 4.1, 4.4_
 
-- [ ] 7. Implement bi-directional linking system
+- [x] 7. Implement bi-directional linking system
 
-  - [ ] 7.1 Create Link service for relationship management
+  - [x] 7.1 Create Link service for relationship management
 
     - Implement bi-directional link creation and maintenance
     - Add link integrity validation when notes are renamed or deleted
     - Create backlink computation and storage
     - _Requirements: 2.1, 2.2, 2.5_
 
-  - [ ] 7.2 Add link creation UI and note reference detection
+  - [x] 7.2 Add link creation UI and note reference detection
 
     - Implement link creation through note title references in editor
     - Add autocomplete for existing note titles during link creation
     - Create clickable navigation between linked notes
     - _Requirements: 2.3, 2.4_
 
-  - [ ] 7.3 Build backlinks display component
+  - [x] 7.3 Build backlinks display component
     - Create component to display which notes reference the current note
     - Add clickable navigation to referencing notes
     - Integrate backlinks display into note editor view
