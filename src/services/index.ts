@@ -14,3 +14,4 @@ export type {
 export { StorageErrorCode } from './storage';
 export { IndexedDBStorageService } from './indexeddb-storage';
 export { NoteService, type CreateNoteOptions, type UpdateNoteOptions, type ReorderNoteOptions } from './note-service';
+export { LinkService, type BacklinkEntry } from './link-service';

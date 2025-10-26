@@ -62,6 +62,7 @@
   overflow-y: auto;
   cursor: text;
   min-height: 200px;
+  position: relative;
 }
 
 /* Draft.js Editor Styles */
@@ -155,6 +156,58 @@
 
 .rich-text-editor.read-only .editor-container {
   padding: 0;
+}
+
+.note-link-entity {
+  color: var(--accent-primary, #667eea);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.note-link-entity:focus {
+  outline: 2px solid var(--accent-primary, #667eea);
+  outline-offset: 2px;
+}
+
+.note-link-autocomplete {
+  position: absolute;
+  left: 1rem;
+  bottom: 1rem;
+  background: var(--bg-primary, #ffffff);
+  border: 1px solid var(--border-color, #e9ecef);
+  border-radius: 8px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 220px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 10;
+}
+
+.note-link-autocomplete-option {
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  color: var(--text-primary, #1a1a1a);
+  cursor: pointer;
+}
+
+.note-link-autocomplete-option:hover,
+.note-link-autocomplete-option.selected {
+  background: var(--bg-secondary, #f8f9fa);
+  color: var(--accent-primary, #667eea);
+}
+
+.note-link-autocomplete-empty {
+  font-size: 0.85rem;
+  color: var(--text-secondary, #666666);
+  padding: 0.25rem 0.5rem;
 }
 
 /* Dark Theme Adjustments */

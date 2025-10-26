@@ -3,7 +3,7 @@
  * Based on requirements 1.1, 1.2, 1.9
  */
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   Editor,
   EditorState,
@@ -16,7 +16,8 @@ import {
   AtomicBlockUtils,
   ContentBlock,
   ContentState,
-  SelectionState
+  SelectionState,
+  CompositeDecorator
 } from 'draft-js';
 import type { DraftHandleValue, DraftEditorCommand } from 'draft-js';
 import { draftToMarkdown, markdownToDraft, isMarkdown } from '../utils';
@@ -24,6 +25,7 @@ import { createImageData } from '../utils/image';
 import { EditorImage } from './EditorImage';
 import 'draft-js/dist/Draft.css';
 import './RichTextEditor.css';
+import type { Note } from '../types';
 
 interface ImageEntityData {
   src: string;
@@ -82,6 +84,11 @@ interface ImageBlockRendererConfig {
   props: ImageBlockComponentProps['blockProps'];
 }
 
+interface LinkTrigger {
+  blockKey: string;
+  start: number;
+}
+
 export interface RichTextEditorProps {
   /** Initial content as Draft.js raw content state or Markdown */
   initialContent?: string;
@@ -99,6 +106,12 @@ export interface RichTextEditorProps {
   supportMarkdown?: boolean;
   /** Support image pasting */
   supportImages?: boolean;
+  /** Notes available for cross-linking suggestions */
+  notes?: Note[];
+  /** Identifier of the currently edited note */
+  currentNoteId?: string | null;
+  /** Navigate to a linked note when clicked */
+  onNoteLinkClick?: (noteId: string) => void;
 }
 
 export const RichTextEditor: React.FC<RichTextEditorProps> = ({
@@ -109,8 +122,85 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   readOnly = false,
   autoFocus = false,
   supportMarkdown = true,
-  supportImages = true
+  supportImages = true,
+  notes = [],
+  currentNoteId = null,
+  onNoteLinkClick
 }) => {
+  const noteTitleMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const note of notes) {
+      map.set(note.id, note.title);
+    }
+    return map;
+  }, [notes]);
+
+  const noteLinkDecorator = useMemo(
+    () =>
+      new CompositeDecorator([
+        {
+          strategy: (block, callback, contentState) => {
+            block.findEntityRanges(
+              (character) => {
+                const entityKey = character.getEntity();
+                if (!entityKey) {
+                  return false;
+                }
+
+                const entity = contentState.getEntity(entityKey);
+                return entity.getType() === 'NOTE_LINK';
+              },
+              callback
+            );
+          },
+          component: (props) => {
+            const entity = props.contentState.getEntity(props.entityKey);
+            const data = entity.getData() as { noteId?: string; title?: string };
+            const noteId = typeof data.noteId === 'string' ? data.noteId : undefined;
+            const childText = React.Children.toArray(props.children)
+              .map((child) => (typeof child === 'string' ? child : ''))
+              .join('');
+            const fallbackTitle = typeof data.title === 'string' ? data.title : childText;
+            const resolvedTitle =
+              (noteId ? noteTitleMap.get(noteId) : undefined) ?? fallbackTitle ?? '';
+
+            const handleClick = (event: React.MouseEvent<HTMLSpanElement>) => {
+              event.preventDefault();
+              event.stopPropagation();
+              if (noteId && onNoteLinkClick) {
+                onNoteLinkClick(noteId);
+              }
+            };
+
+            const handleKeyDown = (event: React.KeyboardEvent<HTMLSpanElement>) => {
+              if (!noteId || !onNoteLinkClick) {
+                return;
+              }
+
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                event.stopPropagation();
+                onNoteLinkClick(noteId);
+              }
+            };
+
+            return (
+              <span
+                className="note-link-entity"
+                role={noteId ? 'link' : undefined}
+                tabIndex={noteId ? 0 : -1}
+                onClick={noteId ? handleClick : undefined}
+                onKeyDown={noteId ? handleKeyDown : undefined}
+              >
+                {`[[${resolvedTitle}]]`}
+              </span>
+            );
+          }
+        }
+      ]),
+    [noteTitleMap, onNoteLinkClick]
+  );
+
   const editorRef = useRef<Editor>(null);
   
 
@@ -118,33 +208,71 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   // Initialize editor state
   const [editorState, setEditorState] = useState(() => {
     let initialState: EditorState;
-    
+
     if (initialContent) {
       try {
         // Try to parse as JSON first (Draft.js raw content)
         const contentState = convertFromRaw(JSON.parse(initialContent));
-        initialState = EditorState.createWithContent(contentState);
+        initialState = EditorState.createWithContent(contentState, noteLinkDecorator);
       } catch (error) {
         // If JSON parsing fails and markdown is supported, try parsing as markdown
         if (supportMarkdown && isMarkdown(initialContent)) {
           try {
-            initialState = markdownToDraft(initialContent);
+            const markdownState = markdownToDraft(initialContent);
+            initialState = EditorState.createWithContent(
+              markdownState.getCurrentContent(),
+              noteLinkDecorator
+            );
           } catch (markdownError) {
             console.warn('Failed to parse as markdown:', markdownError);
-            initialState = EditorState.createEmpty();
+            initialState = EditorState.createEmpty(noteLinkDecorator);
           }
         } else {
           console.warn('Failed to parse initial content, using empty state:', error);
-          initialState = EditorState.createEmpty();
+          initialState = EditorState.createEmpty(noteLinkDecorator);
         }
       }
     } else {
-      initialState = EditorState.createEmpty();
+      initialState = EditorState.createEmpty(noteLinkDecorator);
     }
-    
-    // Note: Decorator will be applied when the editor renders
+
     return initialState;
   });
+
+  useEffect(() => {
+    setEditorState((prev) => EditorState.set(prev, { decorator: noteLinkDecorator }));
+  }, [noteLinkDecorator]);
+
+  const [linkTrigger, setLinkTrigger] = useState<LinkTrigger | null>(null);
+  const [linkQuery, setLinkQuery] = useState('');
+  const [isLinkMenuOpen, setIsLinkMenuOpen] = useState(false);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
+
+  const linkSuggestions = useMemo(() => {
+    if (!linkTrigger) {
+      return [];
+    }
+
+    const normalizedQuery = linkQuery.trim().toLowerCase();
+    const candidates = notes.filter(note => note.id !== currentNoteId);
+    const sorted = [...candidates].sort((a, b) =>
+      a.title.localeCompare(b.title, undefined, { sensitivity: 'base' })
+    );
+
+    if (!normalizedQuery) {
+      return sorted.slice(0, 8);
+    }
+
+    return sorted
+      .filter(note => note.title.toLowerCase().includes(normalizedQuery))
+      .slice(0, 8);
+  }, [linkTrigger, notes, currentNoteId, linkQuery]);
+
+  useEffect(() => {
+    if (selectedSuggestionIndex >= linkSuggestions.length && linkSuggestions.length > 0) {
+      setSelectedSuggestionIndex(0);
+    }
+  }, [linkSuggestions, selectedSuggestionIndex]);
 
   // Handle editor state changes
   const handleEditorChange = useCallback((newEditorState: EditorState) => {
@@ -166,6 +294,26 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
   // Custom key bindings
   const keyBindingFn = useCallback((e: React.KeyboardEvent): string | null => {
+    if (linkTrigger && isLinkMenuOpen) {
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          return 'link-autocomplete-down';
+        case 'ArrowUp':
+          e.preventDefault();
+          return 'link-autocomplete-up';
+        case 'Enter':
+          return 'link-autocomplete-select';
+        case 'Tab':
+          e.preventDefault();
+          return 'link-autocomplete-select';
+        case 'Escape':
+          return 'link-autocomplete-cancel';
+        default:
+          break;
+      }
+    }
+
     // Handle custom shortcuts
     if (KeyBindingUtil.hasCommandModifier(e)) {
       switch (e.keyCode) {
@@ -181,7 +329,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
 
     return getDefaultKeyBinding(e);
-  }, []);
+  }, [isLinkMenuOpen, linkTrigger]);
 
   const handleCreateLink = useCallback(() => {
     const run = async () => {
@@ -256,11 +404,117 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     void run();
   }, [editorState, handleEditorChange]);
 
+  const focusEditor = useCallback(() => {
+    if (editorRef.current) {
+      editorRef.current.focus();
+    }
+  }, []);
+
+  const cancelLinkAutocomplete = useCallback(() => {
+    setLinkTrigger(null);
+    setLinkQuery('');
+    setIsLinkMenuOpen(false);
+    setSelectedSuggestionIndex(0);
+  }, []);
+
+  const insertNoteLink = useCallback(
+    (targetNote: Note) => {
+      if (!linkTrigger) {
+        return;
+      }
+
+      const selection = editorState.getSelection();
+      if (!selection.isCollapsed() || selection.getStartKey() !== linkTrigger.blockKey) {
+        return;
+      }
+
+      const blockKey = linkTrigger.blockKey;
+      const startOffset = linkTrigger.start;
+      const endOffset = selection.getStartOffset();
+
+      let contentState = editorState.getCurrentContent();
+      contentState = contentState.createEntity('NOTE_LINK', 'IMMUTABLE', {
+        noteId: targetNote.id,
+        title: targetNote.title
+      });
+      const entityKey = contentState.getLastCreatedEntityKey();
+
+      const updatedContent = Modifier.replaceText(
+        contentState,
+        SelectionState.createEmpty(blockKey).merge({
+          anchorOffset: startOffset,
+          focusOffset: endOffset
+        }) as SelectionState,
+        `[[${targetNote.title}]]`,
+        undefined,
+        entityKey
+      );
+
+      const newEditorState = EditorState.push(
+        editorState,
+        updatedContent,
+        'insert-characters'
+      );
+
+      handleEditorChange(newEditorState);
+      cancelLinkAutocomplete();
+      setTimeout(focusEditor, 0);
+    },
+    [cancelLinkAutocomplete, editorState, focusEditor, handleEditorChange, linkTrigger]
+  );
+
   // Handle key commands
   const handleKeyCommand = useCallback((
     command: DraftEditorCommand | string,
     editorStateParam: EditorState
   ): DraftHandleValue => {
+    if (linkTrigger && isLinkMenuOpen) {
+      if (command === 'link-autocomplete-down') {
+        if (linkSuggestions.length > 0) {
+          setSelectedSuggestionIndex((prev) => (prev + 1) % linkSuggestions.length);
+        }
+        return 'handled';
+      }
+
+      if (command === 'link-autocomplete-up') {
+        if (linkSuggestions.length > 0) {
+          setSelectedSuggestionIndex((prev) =>
+            (prev - 1 + linkSuggestions.length) % linkSuggestions.length
+          );
+        }
+        return 'handled';
+      }
+
+      if (command === 'link-autocomplete-select') {
+        if (linkSuggestions.length > 0) {
+          const suggestion =
+            linkSuggestions[selectedSuggestionIndex] ?? linkSuggestions[0];
+          insertNoteLink(suggestion);
+        } else {
+          const normalizedQuery = linkQuery.trim().toLowerCase();
+          if (normalizedQuery.length > 0) {
+            const exactMatch = notes
+              .filter(note => note.id !== currentNoteId)
+              .find(note => note.title.toLowerCase() === normalizedQuery);
+
+            if (exactMatch) {
+              insertNoteLink(exactMatch);
+            } else {
+              cancelLinkAutocomplete();
+            }
+          } else {
+            cancelLinkAutocomplete();
+          }
+        }
+        return 'handled';
+      }
+
+      if (command === 'link-autocomplete-cancel') {
+        cancelLinkAutocomplete();
+        return 'handled';
+      }
+    }
+
     // Handle rich text commands
     const newState = RichUtils.handleKeyCommand(
       editorStateParam,
@@ -286,16 +540,114 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       default:
         return 'not-handled';
     }
-  }, [handleCreateLink, handleEditorChange]);
+  }, [
+    cancelLinkAutocomplete,
+    currentNoteId,
+    handleCreateLink,
+    handleEditorChange,
+    insertNoteLink,
+    isLinkMenuOpen,
+    linkQuery,
+    linkSuggestions,
+    linkTrigger,
+    notes,
+    selectedSuggestionIndex
+  ]);
 
-  // Focus the editor
-  const focusEditor = useCallback(() => {
-    if (editorRef.current) {
-      editorRef.current.focus();
+  const handleBeforeInput = useCallback(
+    (chars: string): DraftHandleValue => {
+      if (readOnly) {
+        return 'not-handled';
+      }
+
+      if (chars === '[') {
+        const selection = editorState.getSelection();
+        if (!selection.isCollapsed()) {
+          return 'not-handled';
+        }
+
+        const block = editorState.getCurrentContent().getBlockForKey(selection.getStartKey());
+        const offset = selection.getStartOffset();
+        const previousChar = block.getText().slice(Math.max(0, offset - 1), offset);
+
+        if (previousChar === '[') {
+          setLinkTrigger({ blockKey: selection.getStartKey(), start: offset - 1 });
+          setSelectedSuggestionIndex(0);
+          setIsLinkMenuOpen(true);
+        }
+
+        return 'not-handled';
+      }
+
+      if (linkTrigger && (chars === ' ' || chars === '\n')) {
+        cancelLinkAutocomplete();
+      }
+
+      return 'not-handled';
+    },
+    [cancelLinkAutocomplete, editorState, linkTrigger, readOnly]
+  );
+
+  useEffect(() => {
+    if (!linkTrigger) {
+      return;
     }
-  }, []);
 
+    const selection = editorState.getSelection();
+    if (!selection.isCollapsed() || selection.getStartKey() !== linkTrigger.blockKey) {
+      cancelLinkAutocomplete();
+      return;
+    }
 
+    const block = editorState.getCurrentContent().getBlockForKey(linkTrigger.blockKey);
+    const currentOffset = selection.getStartOffset();
+
+    if (currentOffset < linkTrigger.start + 2) {
+      cancelLinkAutocomplete();
+      return;
+    }
+
+    if (block.getText().slice(linkTrigger.start, linkTrigger.start + 2) !== '[[') {
+      cancelLinkAutocomplete();
+      return;
+    }
+
+    const rawQuery = block.getText().slice(linkTrigger.start + 2, currentOffset);
+    if (rawQuery.includes('\n')) {
+      cancelLinkAutocomplete();
+      return;
+    }
+
+    if (rawQuery.endsWith(']]')) {
+      const candidate = rawQuery.slice(0, -2).trim();
+      if (candidate.length === 0) {
+        cancelLinkAutocomplete();
+        return;
+      }
+
+      const exactMatch = notes
+        .filter(note => note.id !== currentNoteId)
+        .find(note => note.title.toLowerCase() === candidate.toLowerCase());
+
+      if (exactMatch) {
+        insertNoteLink(exactMatch);
+        return;
+      }
+
+      cancelLinkAutocomplete();
+      return;
+    }
+
+    setLinkQuery(rawQuery);
+    setIsLinkMenuOpen(true);
+  }, [
+    cancelLinkAutocomplete,
+    currentNoteId,
+    editorState,
+    insertNoteLink,
+    linkTrigger,
+    notes
+  ]);
 
   // Auto-focus on mount
   useEffect(() => {
@@ -531,6 +883,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           ref={editorRef}
           editorState={editorState}
           onChange={handleEditorChange}
+          handleBeforeInput={handleBeforeInput}
           keyBindingFn={keyBindingFn}
           handleKeyCommand={handleKeyCommand}
           handlePastedText={handlePastedText}
@@ -541,6 +894,29 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           readOnly={readOnly}
           spellCheck={true}
         />
+        {isLinkMenuOpen ? (
+          <div className="note-link-autocomplete" role="listbox">
+            {linkSuggestions.length === 0 ? (
+              <div className="note-link-autocomplete-empty">No matching notes</div>
+            ) : (
+              linkSuggestions.map((suggestion, index) => (
+                <button
+                  key={suggestion.id}
+                  type="button"
+                  className={`note-link-autocomplete-option${
+                    index === selectedSuggestionIndex ? ' selected' : ''
+                  }`}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    insertNoteLink(suggestion);
+                  }}
+                >
+                  {suggestion.title || 'Untitled Note'}
+                </button>
+              ))
+            )}
+          </div>
+        ) : null}
       </div>
     </div>
   );

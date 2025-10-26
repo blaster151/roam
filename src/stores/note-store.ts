@@ -6,6 +6,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Note } from '../types';
+import { LinkService } from '../services';
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -63,32 +64,39 @@ export const useNoteStore = create<NoteState>()(
       unsavedChanges: {},
       
       // Actions
-      setNotes: (notes) => set({ notes }),
+      setNotes: (notes) => set({ notes: LinkService.reconcileNoteLinks(notes) }),
       
-      addNote: (note) => set((state) => ({
-        notes: [...state.notes, note]
-      })),
+      addNote: (note) =>
+        set((state) => ({
+          notes: LinkService.reconcileNoteLinks([...state.notes, note])
+        })),
       
-      updateNote: (id, updates) => set((state) => ({
-        notes: state.notes.map(note => 
-          note.id === id 
-            ? { ...note, ...updates, updatedAt: new Date() }
-            : note
-        )
-      })),
+      updateNote: (id, updates) =>
+        set((state) => ({
+          notes: LinkService.reconcileNoteLinks(
+            state.notes.map(note =>
+              note.id === id
+                ? { ...note, ...updates, updatedAt: new Date() }
+                : note
+            )
+          )
+        })),
       
-      deleteNote: (id) => set((state) => {
-        // Also remove from selection if it's the selected note
-        const newState: Partial<NoteState> = {
-          notes: state.notes.filter(note => note.id !== id)
-        };
-        
-        if (state.selectedNoteId === id) {
-          newState.selectedNoteId = null;
-        }
-        
-        return newState;
-      }),
+      deleteNote: (id) =>
+        set((state) => {
+          const filtered = state.notes.filter(note => note.id !== id);
+          const reconciled = LinkService.reconcileNoteLinks(filtered);
+
+          const newState: Partial<NoteState> = {
+            notes: reconciled
+          };
+
+          if (state.selectedNoteId === id) {
+            newState.selectedNoteId = null;
+          }
+
+          return newState;
+        }),
       
       selectNote: (id) => set({ selectedNoteId: id }),
       
@@ -218,8 +226,10 @@ export const useNoteStore = create<NoteState>()(
             note => normalizeParent(note.parentId) !== destinationParentId
           );
 
+          const updatedNotes = [...remainingNotes, ...destinationSiblings];
+
           return {
-            notes: [...remainingNotes, ...destinationSiblings]
+            notes: LinkService.reconcileNoteLinks(updatedNotes)
           };
         }),
 
